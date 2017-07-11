@@ -3,8 +3,8 @@
 
 # IET-OU / ou-embed-php
 
-A simple wrapper around the [oEmbed]-powered [simexis/embed][] library,
-with some [OU-specific][omp] goodness sprinkled on top.
+A simple wrapper around the [oEmbed][]-powered [simexis/embed][] and
+[essence][] libraries, with some [OU-specific][omp] goodness sprinkled on top.
 
 * http://podcast.open.ac.uk/pod/thoughtexperiments-01#!0a399e2b9b
 * https://embed.open.ac.uk
@@ -20,5 +20,8 @@ with some [OU-specific][omp] goodness sprinkled on top.
 [travis]:  https://travis-ci.org/IET-OU/ou-embed-php "Build status – Travis-CI (PHP)"
 [travis-icon]: https://api.travis-ci.org/IET-OU/ou-embed-php.svg
 [oembed]: http://oembed.com "Cal Henderson (iamcal) & contributors (2010-2017). 'oEmbed specification'."
-[simexis/embed]: https://packagist.org/packages/simexis/embed
-[essence]: https://packagist.org/packages/essence/essence  "No proxy support :(!"
+[simexis/embed]: https://packagist.org/packages/simexis/embed "PHP library to retrieve page info using oembed, opengraph, etc"
+[essence]: https://essence.github.io/essence "..extract information about web pages, like youtube videos, twitter statuses or blog articles."
+[essence-pkg]: https://packagist.org/packages/essence/essence  "No proxy support :( ?"
+
+[End]: //

@@ -9,13 +9,25 @@
  * @link      https://packagist.org/packages/essence/essence  No proxy support :(!
  */
 
-use GuzzleHttp\Client;
+use Essence\Essence;
+use Essence\Di\Container as EssenceInject;
+use GuzzleHttp\Client as Guzzle;
+use IET_OU\OU_Embed\GuzzleClient as OuGuzzle;
+
+use GuzzleHttp\HandlerStack;
+use Kevinrob\GuzzleCache\CacheMiddleware;
+
+/* use Doctrine\Common\Cache\FilesystemCache;
+use Kevinrob\GuzzleCache\Strategy\PrivateCacheStrategy;
+use Kevinrob\GuzzleCache\Storage\DoctrineCacheStorage; */
 
 class OuEmbed
 {
     const OU_OEMBED_URL = 'https://embed.open.ac.uk/oembed?url=%s';
     const OU_PROXY = 'http://wwwcache.open.ac.uk:80';
     const OU_PODCAST_REGEX = '@\/\/podcast.open.ac.uk\/@';
+
+    protected static $headers = [ 'User-Agent' => 'ou-embed-php' ];
 
     /**
      * Attempt to create a HTML embed code/snippet for a URL.
@@ -28,28 +40,44 @@ class OuEmbed
         $embed = self::resolveOupodcastEmbed($url);
 
         if (! $embed) {
-            // $info = \Embed\Embed::create( 'https://www.youtube.com/watch?v=vUxEC5c-Rc0',
-            // [ 'resolver' => [ 'config' => [ CURLOPT_PROXY => 'http://wwwcache.open.ac.uk:80' ]] ]
-            // /*, [ 'resolver' => [ 'class' => 'Embed\\RequestResolvers\\Guzzle5' ]]*/ );
-            $info = \Embed\Embed::create($url, [ 'resolver' => [ 'config' => [ CURLOPT_PROXY => env('APP_PROXY') ]] ]);
+            $essence = new Essence([
+                // the container will return a unique instance of CustomHttpClient
+                // each time an HTTP client is needed
+                'Http' => EssenceInject::unique(function () {
+                    return new OuGuzzle([ 'proxy' => env('APP_PROXY'),
+                        'handler' => self::getStack(), 'headers' => self::$headers ]);
+                })
+            ]);
 
-            $embed = (object) [
-                'type' => $info->type,
-                'title' => $info->title,
-                'url' => $info->url,
-                'html' => $info->getCode(),
-                'date' => $info->publishedDate,
-            ];
+            $media = $essence->extract($url);
+
+            $embed = $media ? (object) $media->properties() : null;
         }
 
         self::debug($embed);
-        // header('X-ou-embed-php-01: ' . json_encode($embed));
 
         return $embed;
     }
 
+    protected static function legacyResolveEmbed($url)
+    {
+        $info = \Embed\Embed::create($url, [ 'resolver' => [ 'config' => [ CURLOPT_PROXY => env('APP_PROXY'),
+            'handler' => self::getStack() ]] ]);
+
+        return (object) [
+            'type' => $info->type,
+            'title' => $info->title,
+            'url' => $info->url,
+            'html' => $info->getCode(),
+            'date' => $info->publishedDate,
+        ];
+    }
+
     /**
      * As "podcast.open.ac.uk" does not implement oEmbed auto-discovery, we intercept these calls.
+     *
+     * @param $url string
+     * @return null | object An object with a 'html', 'title' and other properites.
      */
     protected static function resolveOupodcastEmbed($url)
     {
@@ -57,9 +85,11 @@ class OuEmbed
 
         if (preg_match(self::OU_PODCAST_REGEX, $url)) {
             $request_url = sprintf(self::OU_OEMBED_URL, urlencode($url));
+            $headers = self::$headers;
 
-            $client = new \GuzzleHttp\Client([ 'base_uri' => $request_url, 'proxy' => env('APP_PROXY') ]);
-            $response = $client->request('GET');
+            $client = new Guzzle([ 'proxy' => env('APP_PROXY'), 'handler' => self::getStack(), 'headers' => $headers ]);
+
+            $response = $client->request('GET', $request_url);
 
             $body = (string) $response->getBody();
 
@@ -76,6 +106,26 @@ class OuEmbed
         static $count = 0;
         header(sprintf('X-ou-embed-php-%02d: %s', $count, json_encode($obj)));
         $count++;
+    }
+
+    protected static function getStack()
+    {
+        // Create default HandlerStack
+        $stack = HandlerStack::create();
+
+        // Add this middleware to the top with `push`
+        $stack->push(new CacheMiddleware(), 'cache');
+
+        /* $stack->push(
+            new CacheMiddleware(
+                new PrivateCacheStrategy(
+                    new DoctrineCacheStorage(new FilesystemCache('/tmp/'))
+                )
+            ),
+            'cache'
+        ); */
+
+        return $stack;
     }
 }
 
